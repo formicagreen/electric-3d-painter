@@ -12,8 +12,8 @@
             [clojure.core :as c]))
 
 
-(def colors [{:r 255 :g 0 :b 0} 
-             {:r 0 :g 255 :b 0} 
+(def colors [{:r 255 :g 0 :b 0}
+             {:r 0 :g 255 :b 0}
              {:r 0 :g 0 :b 255}
              {:r 255 :g 0 :b 255}
              {:r 0 :g 255 :b 255}
@@ -34,7 +34,7 @@
 
 #_#?(:cljs (def !draw-distance (atom 10)))
 
-#?(:cljs (def !mode (atom :draw)))
+#?(:cljs (def !mode (atom :navigate)))
 
 #_(e/def draw-distance (e/client (e/watch !draw-distance)))
 
@@ -101,40 +101,40 @@
              (swap! !paths update-in [current-path-id :points] conj [world-x world-y world-z]))))))))
 
 #_(e/defn pointermove [e]
-  (let [x (.-clientX e)
-        y (.-clientY e)
-        camera @!camera
-        raycaster (three/Raycaster.)
-        renderer-width (.-innerWidth js/window)
-        renderer-height (.-innerHeight js/window)
-        screenPos (three/Vector3. (/ (* 2 (- x (/ renderer-width 2))) renderer-width)
-                                  (/ (* -2 (- y (/ renderer-height 2))) renderer-height)
-                                  0.5)]
+    (let [x (.-clientX e)
+          y (.-clientY e)
+          camera @!camera
+          raycaster (three/Raycaster.)
+          renderer-width (.-innerWidth js/window)
+          renderer-height (.-innerHeight js/window)
+          screenPos (three/Vector3. (/ (* 2 (- x (/ renderer-width 2))) renderer-width)
+                                    (/ (* -2 (- y (/ renderer-height 2))) renderer-height)
+                                    0.5)]
 
     ; Set the raycaster using the screenPos and camera
-    (.setFromCamera raycaster screenPos camera)
+      (.setFromCamera raycaster screenPos camera)
 
     ; Calculate the plane's position based on the draw distance
-    (let [direction (doto (three/Vector3. 0 0 -1) (.applyQuaternion (.-quaternion camera)))
-          plane-pos (.clone (.-position camera))
-          distance (.distanceToPlane plane-pos direction)
-          _ (.addScaledVector plane-pos direction distance)
-          plane-normal (doto (three/Vector3.)
-                         (.subVectors plane-pos (.-position camera))
-                         (.normalize))
-          plane (three/Plane. plane-normal 0)
-          intersectPoint (three/Vector3.)
-          intersects (.intersectPlane (.-ray raycaster) plane intersectPoint)]
+      (let [direction (doto (three/Vector3. 0 0 -1) (.applyQuaternion (.-quaternion camera)))
+            plane-pos (.clone (.-position camera))
+            distance (.distanceToPlane plane-pos direction)
+            _ (.addScaledVector plane-pos direction distance)
+            plane-normal (doto (three/Vector3.)
+                           (.subVectors plane-pos (.-position camera))
+                           (.normalize))
+            plane (three/Plane. plane-normal 0)
+            intersectPoint (three/Vector3.)
+            intersects (.intersectPlane (.-ray raycaster) plane intersectPoint)]
 
       ; If there's an intersection
-      (when intersects
-        (let [world-x (.-x intersectPoint)
-              world-y (.-y intersectPoint)
-              world-z (.-z intersectPoint)]
-          (e/server
-           (swap! !users assoc session-id [world-x world-y world-z])
-           (when (and current-path-id (= mode :draw))
-             (swap! !paths update-in [current-path-id :points] conj [world-x world-y world-z]))))))))
+        (when intersects
+          (let [world-x (.-x intersectPoint)
+                world-y (.-y intersectPoint)
+                world-z (.-z intersectPoint)]
+            (e/server
+             (swap! !users assoc session-id [world-x world-y world-z])
+             (when (and current-path-id (= mode :draw))
+               (swap! !paths update-in [current-path-id :points] conj [world-x world-y world-z]))))))))
 
 
 (e/defn pointerup [e] (reset! !current-path-id nil))
@@ -148,6 +148,9 @@
 (e/defn Threedee-canvas []
   (e/client
    (dom/div
+    (dom/on "pointerdown" pointerdown)
+    (dom/on "pointerup" pointerup)
+    (dom/on "pointermove" pointermove)
     (let [!state (atom 0)
           state (e/watch !state)
           !pos (atom {:x 0 :y 0 :z 5})
@@ -169,7 +172,7 @@
                   (th/DirectionalLight [0xFFFFFF 0.005]
                                        (th/props {:position {:x 1 :y 1 :z 3}
                                                   :castShadow true}))
-                  (e/for-by key [[k v] paths]
+                  (e/for-by key [[k v] paths] 
                             (e/for [point (:points v)]
                               (th/Mesh
                                [(th/BoxGeometry [0.1 0.1 0.1])
@@ -212,15 +215,14 @@
        (dom/props {:class "hover"})
        (dom/on "click"
                (e/fn [e] (reset! !current-color color) (reset! !mode :draw)))))
-    (dom/div 
+    (dom/div
      (dom/text "🌐")
      (dom/props {:class "hover"})
      (dom/on "click"
              (e/fn [e] (reset! !mode :navigate))))
     #_(ui/input
-     draw-distance
-     (e/fn [v] (reset! !draw-distance v)))
-    )
+       draw-distance
+       (e/fn [v] (reset! !draw-distance v))))
     ; Delete button
    (dom/div
     (dom/props {:class "hover"})
@@ -258,18 +260,13 @@
   (dom/div
    (dom/style {:width "100vw"
                :height "100vh"})
-   ; Event listeners 
-   (dom/on "pointerdown" pointerdown)
-   (dom/on "pointerup" pointerup)
-   (dom/on "pointermove" pointermove)
    ; UI
    (Toolbar.)
    (Threedee-canvas.)
-  (e/server
-   (swap! !users assoc session-id [nil nil])
-   (e/on-unmount #(swap! !users dissoc session-id)))))
+   (e/server
+    (swap! !users assoc session-id [nil nil])
+    (e/on-unmount #(swap! !users dissoc session-id)))))
 
 (comment
   @!paths
-  (reset! !paths {})
-  )
+  (reset! !paths {}))
