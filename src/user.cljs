@@ -7,7 +7,7 @@
 (def electric-main
   (hyperfiddle.electric/boot ; Electric macroexpansion - Clojure to signals compiler
     (binding [hyperfiddle.electric-dom2/node js/document.body]
-      (app.todo-list/Some.))))
+      (app.todo-list/App.))))
 
 (defonce reactor nil)
 

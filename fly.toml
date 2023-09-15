@@ -1,7 +1,9 @@
-app = "electric-starter-app"
-primary_region = "ewr"
+# fly.toml file generated for electric-3d-painter on 2023-09-15T14:57:46+02:00
+
+app = "electric-3d-painter"
 kill_signal = "SIGINT"
-kill_timeout = "5s"
+kill_timeout = 5
+primary_region = "arn"
 
 [experimental]
   auto_rollback = true

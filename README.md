@@ -1,3 +1,7 @@
+# Electric 3D Painter
+
+Based on:
+
 # electric-three-demo
 [Three.js](https://threejs.org/) adapter for [Electric Clojure](https://github.com/hyperfiddle/electric)
 
