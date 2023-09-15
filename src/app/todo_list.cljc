@@ -37,7 +37,7 @@
 #?(:cljs (def !mode (atom :navigate)))
 
 #_(e/def draw-distance (e/client (e/watch !draw-distance)))
-
+ 
 (e/def mode (e/client (e/watch !mode)))
 
 (e/def paths (e/server (e/watch !paths)))
