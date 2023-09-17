@@ -5,11 +5,7 @@
             [app.orbit-controls :as ctrl]
             #?(:cljs ["three" :as three])
             #?(:cljs ["three/examples/jsm/controls/OrbitControls" :as  orbitcontrols])
-            [app.three :as th]
-            [hyperfiddle.electric-ui4 :as ui]
-            [clojure.string :as str]
-            [hyperfiddle.electric-svg :as svg]
-            [clojure.core :as c]))
+            [app.three :as th]))
 
 
 (def colors [{:r 255 :g 0 :b 0}
@@ -19,6 +15,8 @@
              {:r 0 :g 255 :b 255}
              {:r 255 :g 255 :b 0}
              {:r 255 :g 255 :b 255}])
+
+#?(:cljs (def !plane (atom nil)))
 
 #?(:clj (defonce !paths (atom {})))
 
@@ -32,11 +30,15 @@
 
 #?(:cljs (def !cursor-position (atom [nil nil])))
 
-#_#?(:cljs (def !draw-distance (atom 10)))
+#?(:cljs (def !force-render (atom 0)))
+
+(e/def force-render (e/client (e/watch !force-render)))
 
 #?(:cljs (def !mode (atom :navigate)))
 
-#_(e/def draw-distance (e/client (e/watch !draw-distance)))
+#?(:cljs (def !show-plane (atom true)))
+
+(e/def show-plane (e/client (e/watch !show-plane)))
  
 (e/def mode (e/client (e/watch !mode)))
 
@@ -63,44 +65,11 @@
         id (.now js/Date)]
     (reset! !current-path-id id)
     (e/server
-     (swap! !paths assoc id {:points []
+     (swap! !paths assoc id {:points [] 
                              :color current-color}))))
+
 (e/defn pointermove [e]
-  (let [x (.-clientX e)
-        y (.-clientY e)
-        camera @!camera
-        raycaster (three/Raycaster.)
-        renderer-width (.-innerWidth js/window)
-        renderer-height (.-innerHeight js/window)
-        screenPos (three/Vector3. (/ (* 2 (- x (/ renderer-width 2))) renderer-width)
-                                  (/ (* -2 (- y (/ renderer-height 2))) renderer-height)
-                                  0.5)]
-
-    ; Set the raycaster using the screenPos and camera
-    (.setFromCamera raycaster screenPos camera)
-
-    ; Calculate the plane's normal which always points from the plane's position to the camera's position
-    ; Assuming the plane's position to be at the origin, you can adjust if needed
-    ; Subtracting camera's position from plane's position to get the direction
-    (let [plane-pos (three/Vector3. 0 0 0)  ; adjust this as per your requirements
-          plane-normal (doto (three/Vector3.)
-                         (.subVectors plane-pos (.-position camera))
-                         (.normalize))
-          plane (three/Plane. plane-normal 0)
-          intersectPoint (three/Vector3.)
-          intersects (.intersectPlane (.-ray raycaster) plane intersectPoint)]
-
-      ; If there's an intersection
-      (when intersects
-        (let [world-x (.-x intersectPoint)
-              world-y (.-y intersectPoint)
-              world-z (.-z intersectPoint)]
-          (e/server
-           (swap! !users assoc session-id [world-x world-y world-z])
-           (when (and current-path-id (= mode :draw))
-             (swap! !paths update-in [current-path-id :points] conj [world-x world-y world-z]))))))))
-
-#_(e/defn pointermove [e]
+  (when (and @!plane @!camera)
     (let [x (.-clientX e)
           y (.-clientY e)
           camera @!camera
@@ -113,29 +82,42 @@
 
     ; Set the raycaster using the screenPos and camera
       (.setFromCamera raycaster screenPos camera)
-
-    ; Calculate the plane's position based on the draw distance
-      (let [direction (doto (three/Vector3. 0 0 -1) (.applyQuaternion (.-quaternion camera)))
-            plane-pos (.clone (.-position camera))
-            distance (.distanceToPlane plane-pos direction)
-            _ (.addScaledVector plane-pos direction distance)
-            plane-normal (doto (three/Vector3.)
-                           (.subVectors plane-pos (.-position camera))
-                           (.normalize))
-            plane (three/Plane. plane-normal 0)
-            intersectPoint (three/Vector3.)
-            intersects (.intersectPlane (.-ray raycaster) plane intersectPoint)]
-
-      ; If there's an intersection
-        (when intersects
-          (let [world-x (.-x intersectPoint)
+      
+      (.lookAt @!plane (.-position @!camera))
+          ; Using intersectObject method for mesh intersection
+      (let [intersections (.intersectObject raycaster @!plane)]
+        (when (seq intersections)
+          (let [intersectPoint (.-point (first intersections))
+                world-x (.-x intersectPoint)
                 world-y (.-y intersectPoint)
                 world-z (.-z intersectPoint)]
             (e/server
              (swap! !users assoc session-id [world-x world-y world-z])
              (when (and current-path-id (= mode :draw))
-               (swap! !paths update-in [current-path-id :points] conj [world-x world-y world-z]))))))))
+               (swap! !paths update-in [current-path-id :points] conj [world-x world-y world-z])))))))))
 
+(defn move-plane [x]
+  (let [camera-dir (three/Vector3.)
+        plane-pos (.-position @!plane)
+        camera-pos (.-position @!camera)]
+
+    ; Subtracting camera's position from plane's position to get direction
+    (.subVectors camera-dir plane-pos camera-pos)
+
+    ; Normalize the direction to get a unit vector
+    (.normalize camera-dir)
+
+    ; Scale the direction by x to get the movement vector
+    (.multiplyScalar camera-dir x)
+
+    ; Add the movement vector to the plane's current position
+    (.addVectors plane-pos plane-pos camera-dir)
+
+    ; Update the plane's position
+    (set! (.-position @!plane) {:x 0 :y 1 :z 2})
+
+    ; Force a render 
+    (swap! !force-render inc)))
 
 (e/defn pointerup [e] (reset! !current-path-id nil))
 
@@ -172,6 +154,13 @@
                   (th/DirectionalLight [0xFFFFFF 0.005]
                                        (th/props {:position {:x 1 :y 1 :z 3}
                                                   :castShadow true}))
+                  (let [plane (th/Mesh
+                               [(th/PlaneGeometry [100 100])
+                                (th/MeshStandardMaterial [] (th/props {:color {:r 0 :g 0 :b 0}
+                                                                       :opacity (if show-plane 0.9 0)
+                                                                       :dummy-prop force-render
+                                                                       :transparent true}))])]
+                    (reset! !plane plane))
                   (e/for-by key [[k v] paths] 
                             (e/for [point (:points v)]
                               (th/Mesh
@@ -213,24 +202,37 @@
                    :height "30px"
                    :background (str "rgb(" (:r color) "," (:g color) "," (:b color) ")")})
        (dom/props {:class "hover"})
-       (dom/on "click"
-               (e/fn [e] (reset! !current-color color) (reset! !mode :draw)))))
+       (dom/on "click" (e/fn [e] (reset! !current-color color) (reset! !mode :draw))))))
+   (dom/div
+    (dom/style {:display "flex"
+                :flex-direction "column"
+                :align-items "center"
+                :gap "10px"
+                :justify-content "center"})
     (dom/div
      (dom/text "🌐")
      (dom/props {:class "hover"})
+     (dom/on "click" (e/fn [e] (reset! !mode :navigate))))
+    (dom/div
+     (dom/text "🏔️")
+     (dom/props {:class "hover"})
+     (dom/on "click" (e/fn [e] (move-plane 1))))
+    (dom/div
+     (dom/text "🐛")
+     (dom/props {:class "hover"})
+     (dom/on "click" (e/fn [e] (move-plane -1))))
+    (dom/div
+     (dom/text "📏")
+     (dom/props {:class "hover"})
+     (dom/on "click" (e/fn [e] (swap! !show-plane not))))
+       ; Delete button
+    (dom/div
+     (dom/props {:class "hover"})
      (dom/on "click"
-             (e/fn [e] (reset! !mode :navigate))))
-    #_(ui/input
-       draw-distance
-       (e/fn [v] (reset! !draw-distance v))))
-    ; Delete button
-   (dom/div
-    (dom/props {:class "hover"})
-    (dom/on "click"
-            (e/fn [e]
-              (e/server
-               (reset! !paths {}))))
-    (dom/text "🗑️"))))
+             (e/fn [e]
+               (e/server
+                (reset! !paths {}))))
+     (dom/text "🗑️")))))
 
 (e/defn Debugger [x]
   (dom/div
