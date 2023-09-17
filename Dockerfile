@@ -5,9 +5,17 @@ COPY src-build src-build
 RUN clojure -A:dev -M -e :ok        # preload deps
 RUN clojure -T:build noop           # preload build deps
 
+# Install npm deps
+FROM node:20 AS node
+WORKDIR /app
+COPY package.json package.json
+COPY package-lock.json package-lock.json
+RUN npm ci
+
 FROM clojure:openjdk-11-tools-deps AS build
 WORKDIR /app
 COPY --from=clojure-deps /root/.m2 /root/.m2
+COPY --from=node /app/node_modules node_modules
 COPY shadow-cljs.edn shadow-cljs.edn
 COPY deps.edn deps.edn
 COPY src src
