@@ -36,7 +36,7 @@
 
 #?(:cljs (def !mode (atom :navigate)))
 
-#?(:cljs (def !show-plane (atom true)))
+#?(:cljs (def !show-plane (atom false)))
 
 (e/def show-plane (e/client (e/watch !show-plane)))
  

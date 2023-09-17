@@ -141,12 +141,7 @@
 (gen_factory DodecahedronGeometry :three/DodecahedronGeometry disposable-obj)
 (gen_factory EdgesGeometry :three/EdgesGeometry disposable-obj)
 (gen_factory ExtrudeGeometry :three/ExtrudeGeometry disposable-obj)
-(gen_factory TubeGeometry :three/TubeGeometry disposable-obj)
-
-(comment 
-  three/TubeGeometry
-  (macroexpand (TubeGeometry (three/CatmullRomCurve [[0 0 0] [1 1 1]]) 50  0.1 8))
-  )
+(gen_factory PlaneGeometry :three/PlaneGeometry disposable-obj)
 
 
 
